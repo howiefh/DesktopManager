@@ -1,62 +1,131 @@
 ﻿#SingleInstance, force
 #include include\WatchDirectory.ahk
+#include include\ShellContextMenu.ahk
 ; 下面是一个比此页面顶部附近那个更精巧的可运行脚本.
 ; 它显示用户文件夹中的文件, 且每个文件分配一个与其类型关联的图标.
 ; 用户在一个文件上双击或在一个或多个文件上右击后, 会显示上下文菜单.
-DM_gitCmd:= """C:\Windows\system32\wscript"" ""D:\PortableApps\Git\Git Bash.vbs"" "
-DM_cmdCmd:= "cmd.exe /s /k pushd"
-; """D:\Applications\HaoZip\HaoZip.exe""
-DM_compressCmd:= """D:\Applications\HaoZip\HaoZipC.exe"" a -tzip "
-DM_decompressCmd:= """D:\Applications\HaoZip\HaoZipC.exe"" x "
-DM_ExtList := "zip,7z,rar"
-DM_templatesDir := a_scriptdir . "\templates"
+;================================
+; read config file start
+;================================
+; 语言文件是记事本中的unicode格式
+DM_iniFilename := "DesktopManager.ini"
+DM_gsection := "DesktopManager"
+IniRead , DM_Folder      , %DM_iniFilename% , %DM_gsection% , folder
+IniRead , DM_gitCmd      , %DM_iniFilename% , %DM_gsection% , gitCmd
+IniRead , DM_cmdCmd      , %DM_iniFilename% , %DM_gsection% , cmdCmd
+IniRead , DM_compressCmd , %DM_iniFilename% , %DM_gsection% , compressCmd
+; DM_decompressCmd:= """D:\Applications\HaoZip\HaoZip.exe"" "
+IniRead , DM_decompressCmd , %DM_iniFilename% , %DM_gsection% , decompressCmd
+IniRead , DM_ComExtList    , %DM_iniFilename% , %DM_gsection% , comExtList
+IniRead , DM_templatesDir  , %DM_iniFilename% , %DM_gsection% , templatesDir  , templates
+IniRead , DM_shortcutDir, %DM_iniFilename% , %DM_gsection% , shortcutDir, shortcut
 
+; 鼠标移动到窗口上方显示按钮。 true 的话显示
+IniRead , DM_isMouseActiveBtn , %DM_iniFilename% , %DM_gsection% , isMouseActiveBtn , true
+IniRead , DM_isIconView       , %DM_iniFilename% , %DM_gsection% , isIconView       , true
+; 可以为任意 RGB 颜色 (在下面会被设置为透明).
+IniRead , DM_bgColor , %DM_iniFilename% , %DM_gsection% , bgColor , 000000
+IniRead , DM_sizeW   , %DM_iniFilename% , %DM_gsection% , sizeW   , 710
+IniRead , DM_sizeH   , %DM_iniFilename% , %DM_gsection% , sizeH   , % A_ScreenHeight - 40
+IniRead , DM_fontC   , %DM_iniFilename% , %DM_gsection% , fontC   , ffffff
+if(DM_sizeW == ""){
+    DM_sizeW   := 710
+}
+if(DM_sizeH == ""){
+    DM_sizeH   := A_ScreenHeight - 40
+}
+ifnotexist DM_Folder 
+{
+    FileCreateDir, %DM_Folder%
+}
 ifnotexist DM_templatesDir
 {
     FileCreateDir, %DM_templatesDir%
 }
+if(InStr(DM_shortcutDir,":")==0){
+    DM_shortcutDir := a_workingdir . "\" DM_shortcutDir
+}
 
-DM_MenuIOpenFile:= "打开"
-DM_MenuIOpenFileDir:= "打开所在位置"
-DM_MenuIGitShell:= "Git shell"
-DM_MenuICMD:= "命令行"
-DM_MenuIProperties:= "属性"
-DM_MenuIClearRows:= "移除"
-DM_MenuICompress:= "压缩"
-DM_MenuIDecompress:= "解压缩"
-DM_MenuIDelete:= "删除"
-DM_MenuIRename:= "重命名"
-DM_MenuICopy:= "复制"
-DM_MenuICut:= "剪切"
-DM_MenuICreateShortcut:= "创建快捷方式"
+ifnotexist DM_shorcutDir
+{
+    FileCreateDir, %DM_shortcutDir%
+}
 
-DM_MenuICreateFolder:= "新建文件夹"
-DM_MenuINew:= "新建"
-DM_MenuIRefresh:= "刷新"
+DM_lsection := "DMLang"
+IniRead, DM_MenuIOpenFile          , %DM_iniFilename%, %DM_lsection%, MenuIOpenFile         , 打开
+IniRead, DM_MenuIOpenFileDir       , %DM_iniFilename%, %DM_lsection%, MenuIOpenFileDir      , 打开所在位置
+IniRead, DM_MenuIGitShell          , %DM_iniFilename%, %DM_lsection%, MenuIGitShell         , Git shell
+IniRead, DM_MenuICMD               , %DM_iniFilename%, %DM_lsection%, MenuICMD              , 命令行
+IniRead, DM_MenuIProperties        , %DM_iniFilename%, %DM_lsection%, MenuIProperties       , 属性
+IniRead, DM_MenuIClearRows         , %DM_iniFilename%, %DM_lsection%, MenuIClearRows        , 移除
+IniRead, DM_MenuICompress          , %DM_iniFilename%, %DM_lsection%, MenuICompress         , 压缩
+IniRead, DM_MenuIDecompress        , %DM_iniFilename%, %DM_lsection%, MenuIDecompress       , 解压缩
+IniRead, DM_MenuIDelete            , %DM_iniFilename%, %DM_lsection%, MenuIDelete           , 删除
+IniRead, DM_MenuIAdd               , %DM_iniFilename%, %DM_lsection%, MenuIAdd              , 添加
+IniRead, DM_MenuIRename            , %DM_iniFilename%, %DM_lsection%, MenuIRename           , 重命名
+IniRead, DM_MenuICopy              , %DM_iniFilename%, %DM_lsection%, MenuICopy             , 复制
+IniRead, DM_MenuICut               , %DM_iniFilename%, %DM_lsection%, MenuICut              , 剪切
+IniRead, DM_MenuIPaste             , %DM_iniFilename%, %DM_lsection%, MenuIPaste            , 粘贴
+IniRead, DM_MenuICreateShortcut    , %DM_iniFilename%, %DM_lsection%, MenuICreateShortcut   , 创建快捷方式
+IniRead, DM_MenuISystemContextMenu , %DM_iniFilename%, %DM_lsection%, MenuISystemContextMenu, 系统菜单
+IniRead, DM_MenuICreateFolder      , %DM_iniFilename%, %DM_lsection%, MenuICreateFolder     , 新建文件夹
+IniRead, DM_MenuINew               , %DM_iniFilename%, %DM_lsection%, MenuINew              , 新建
+IniRead, DM_MenuIRefresh           , %DM_iniFilename%, %DM_lsection%, MenuIRefresh          , 刷新
+IniRead, DM_btnLoadFolderTip       , %DM_iniFilename%, %DM_lsection%, btnLoadFolderTip      , 加载文件夹
+IniRead, DM_btnClearTip            , %DM_iniFilename%, %DM_lsection%, btnClearTip           , 清空
+IniRead, DM_btnSwitchViewTip       , %DM_iniFilename%, %DM_lsection%, btnSwitchViewTip      , 切换视图
+IniRead, DM_btnRefreshTip          , %DM_iniFilename%, %DM_lsection%, btnRefreshTip         , 刷新
+IniRead, DM_btnMoveTip             , %DM_iniFilename%, %DM_lsection%, btnMoveTip            , 移动
+IniRead, DM_btnCloseTip            , %DM_iniFilename%, %DM_lsection%, btnCloseTip           , 退出
+IniRead, DM_btnHomeTip            , %DM_iniFilename%, %DM_lsection%, btnHomeTip           , 主界面
+IniRead, DM_btnSoftTip            , %DM_iniFilename%, %DM_lsection%, btnSoftTip           , 常用软件
+IniRead, DM_btnFileTip            , %DM_iniFilename%, %DM_lsection%, btnFileTip           , 常用文件
 
-DM_btnLoadFolderTip := "加载文件夹"
-DM_btnClearTip:= "清空"
-DM_btnSwitchViewTip:= "切换视图"
-DM_btnRefreshTip:= "刷新"
-DM_btnMoveTip:= "移动"
-DM_btnCloseTip:= "退出"
+;================================
+; read config file end
+;================================
 
-; 鼠标移动到窗口上方显示按钮。 true 的话显示
-DM_isMouseActiveBtn := true
-IconView := true
+
+;================================
+; initial variables start
+;================================
+; 加载文件
+; 计算 SHFILEINFO 结构需要的缓存大小.
+sfi_size := A_PtrSize + 8 + (A_IsUnicode ? 680 : 340)
+VarSetCapacity(sfi, sfi_size)
+
 BeforRemoveToolTip=
+; 图片目录
+DM_img     := "img"
+; 对于在本程序界面中的操作，不需要监控程序监控后进行常规操作,直接在listview操作即可
+isDMCreateFile := false
+isDMRenameFile := false
+
+; 主界面，常用软件，常用文件
+isDMHome := true
+isShowExt:= true
+isfirstStart:= true
+isDMSoft := false
+isDMFile := false
+
 ; 上方的按钮默认隐藏，鼠标移动到窗口上方显示。
+; 如果是按f12显示的话，鼠标移动不会改变按钮隐藏或显示
 DM_btnIsAlwaysShow := DM_btnIsShow := false
 
 LVM_EDITLABELA := 0x1017
 LVM_EDITLABELW := 0x1076
 LVM_EDITLABEL := A_IsUnicode ? LVM_EDITLABELW : LVM_EDITLABELA
 
-DM_bgColor := "000000" ; 可以为任意 RGB 颜色 (在下面会被设置为透明).
-DM_sizeW   := 710
-DM_sizeH   := A_ScreenHeight - 40
-DM_fontC   := "ffffff"
-DM_img     := "img"
+DM_SoftShortcutDir := DM_shortcutDir . "\software"
+DM_FileShortcutDir := DM_shortcutDir . "\file"
+ifnotexist % DM_SoftShortcutDir
+    FileCreateDir % DM_SoftShortcutDir
+ifnotexist % DM_FileShortcutDir
+    FileCreateDir % DM_FileShortcutDir
+;================================
+; initial variables end
+;================================
+
 Gui, Color, %DM_bgColor%, %DM_bgColor%
 Gui, Font, c%DM_fontC%, Arial
 
@@ -76,6 +145,9 @@ Gui, Add, Edit, x+10 w120 vDM_CheckText gDM_CheckText cFF2211
 addPicButton("DM_btnRefresh",DM_img . "\refresh", ,"x+10",DM_btnRefreshTip)
 addPicButton("DM_btnMove",DM_img . "\move", ,"x+10",DM_btnMoveTip)
 addPicButton("DM_btnClose",DM_img . "\quit", ,"x+10",DM_btnCloseTip)
+addPicButton("DM_btnHome",DM_img . "\home", ,"x+10",DM_btnHomeTip)
+addPicButton("DM_btnSoft",DM_img . "\soft", ,"x+10",DM_btnSoftTip)
+addPicButton("DM_btnFile",DM_img . "\file", ,"x+10",DM_btnFileTip)
 
 ; 创建 ListView 及其列:
 Gui, Add, ListView, xm r10 w%DM_sizeW% vDM_ListView gDM_ListView HWNDhDM_ListView +Icon -readonly AltSubmit, Name|In Folder|Size (KB)|Type
@@ -88,7 +160,6 @@ DM_ImageListID2 := IL_Create(10, 10, true)  ; 大图标列表和小图标列表.
 ; 关联图像列表到 ListView, 然而它就可以显示图标了:
 LV_SetImageList(DM_ImageListID1)
 LV_SetImageList(DM_ImageListID2)
-
 
 ; 创建作为上下文菜单的弹出菜单:
 Menu, DM_ContextMenu, Add, % DM_MenuIOpenFile, DM_OpenFile
@@ -110,8 +181,9 @@ Menu, DM_ContextMenu, Add, % DM_MenuIDelete, DM_Delete
 Menu, DM_ContextMenu, Add, 
 Menu, DM_ContextMenu, Add, % DM_MenuIProperties, DM_Properties
 Menu, DM_ContextMenu, Default, % DM_MenuIOpenFile ; 让 "打开" 粗体显示表示双击时会执行相同的操作.
+Menu, DM_ContextMenu, Add, % DM_MenuISystemContextMenu, DM_SystemContextMenu
 
-
+; 在其他位置点右键
 Menu, DM_ContextMenuNewFile, Add, % DM_MenuICreateFolder, DM_CreateFolder
 Menu, DM_ContextMenuNewFile, Add, 
 DM_templates := Object()
@@ -123,7 +195,22 @@ Loop %DM_templatesDir%\* ,1  ;获取目录下文件和文件夹，默认为0仅�
 }
 
 Menu, DM_ContextMenu0, Add, % DM_MenuIRefresh, DM_btnRefresh
+Menu, DM_ContextMenu0, Add, % DM_MenuIPaste, DM_Paste
 Menu, DM_ContextMenu0, Add, % DM_MenuINew, :DM_ContextMenuNewFile
+Menu, DM_ContextMenu0, Add, % DM_MenuISystemContextMenu, DM_SystemContextMenu
+
+
+Menu, DM_ContextMenu1, Add, % DM_MenuIOpenFile, DM_OpenFile
+Menu, DM_ContextMenu1, Add, % DM_MenuIOpenFileDir, DM_OpenFileDir
+Menu, DM_ContextMenu1, Add, 
+Menu, DM_ContextMenu1, Add, % DM_MenuICMD, DM_CMD
+Menu, DM_ContextMenu1, Add, 
+Menu, DM_ContextMenu1, Add, % DM_MenuIRename, DM_Rename
+Menu, DM_ContextMenu1, Add, % DM_MenuIClearRows, DM_ClearRows
+Menu, DM_ContextMenu1, Add, % DM_MenuIDelete, DM_Delete
+Menu, DM_ContextMenu1, Add, % DM_MenuIAdd, DM_AddShortcut
+Menu, DM_ContextMenu1, Add, 
+Menu, DM_ContextMenu1, Add, % DM_MenuIProperties, DM_Properties
 
 ; 设置背景图片
 /*
@@ -163,17 +250,8 @@ DM_ToggleButton(DM_btnIsShow)
 ; 圆角
 ; WinSet, Region, 0-0 W%DM_sizeW% H%DM_sizeH% R40-40, ahk_id %hDesktopManager%
 
-DM_iniFilename := "DesktopManager.ini"
-DM_section := "FolderPath"
-IniRead, DM_Folder, %DM_iniFilename% , %DM_section% , folder
-ifnotexist DM_Folder 
-{
-    FileCreateDir, %DM_Folder%
-}
-; 监视目录变化
-; www.autohotkey.com/board/topic/60125-ahk-lv2-watchdirectory-report-directory-changes/
-WatchDirectory(DM_Folder,"ReportChanges")
-gosub LoadFile
+; gosub LoadFile
+gosub DM_btnHome
 return
 
 DM_btnLoadFolder:
@@ -181,7 +259,6 @@ Gui +OwnDialogs  ; 强制用户解除此对话框后才可以操作主窗口.
 FileSelectFolder, DM_Folder,, 3, 选择目录加载
 if not DM_Folder  ; 用户取消了对话框.
     return
-
 gosub LoadFile
 Return
 
@@ -192,21 +269,42 @@ StringRight, LastChar, DM_Folder, 1
 if LastChar = \
     StringTrimRight, DM_Folder, DM_Folder, 1  ; 移除尾随的反斜线.
 
-; 计算 SHFILEINFO 结构需要的缓存大小.
-sfi_size := A_PtrSize + 8 + (A_IsUnicode ? 680 : 340)
-VarSetCapacity(sfi, sfi_size)
-
 ; 获取所选择文件夹中的文件名列表并添加到 ListView:
 GuiControl, -Redraw, DM_ListView  ; 在加载时禁用重绘来提升性能.
 Loop %DM_Folder%\%DM_CheckText%* ,1  ;获取DM_Folder下文件和文件夹，默认为0仅获取文件。
 {
-    DM_addFile(A_LoopFileFullPath,A_LoopFileName,A_LoopFileDir,A_LoopFileSizeKB)
+    if A_LoopFileAttrib contains H,R,S  ; 跳过具有 H (隐藏), R (只读) 或 S (系统) 属性的任何文件. 注意: 在 "H,R,S" 中不含空格.
+        continue  ; 跳过这个文件并前进到下一个.
+    DM_addFile(A_LoopFileFullPath, isShowExt,A_LoopFileName,A_LoopFileDir,A_LoopFileSizeKB)
 }
 GuiControl, +Redraw, DM_ListView  ; 重新启用重绘 (上面把它禁用了).
 LV_ModifyCol()  ; 根据内容自动调整每列的大小.
 LV_ModifyCol(3, 60) ; 把 Size 列加宽一些以便显示出它的标题.
+; 监视目录变化
+; www.autohotkey.com/board/topic/60125-ahk-lv2-watchdirectory-report-directory-changes/
+WatchDirectory("")
+WatchDirectory(DM_Folder,"ReportChanges")
 return
 
+LoadShortCut:
+if(isDMSoft){
+    curShortcutDir := DM_SoftShortcutDir
+} else {
+    curShortcutDir := DM_FileShortcutDir
+}
+; 监视目录变化
+WatchDirectory("")
+WatchDirectory(curShortcutDir,"ReportChanges")
+; 获取所选择文件夹中的文件名列表并添加到 ListView:
+GuiControl, -Redraw, DM_ListView  ; 在加载时禁用重绘来提升性能.
+Loop %curShortcutDir%\%DM_CheckText%* ,0  ;获取文件0仅获取文件。
+{
+    if A_LoopFileAttrib contains H,R,S  ; 跳过具有 H (隐藏), R (只读) 或 S (系统) 属性的任何文件. 注意: 在 "H,R,S" 中不含空格.
+        continue  ; 跳过这个文件并前进到下一个.
+    DM_addFile(A_LoopFileFullPath, isShowExt,A_LoopFileName,A_LoopFileDir,A_LoopFileSizeKB)
+}
+GuiControl, +Redraw, DM_ListView  ; 重新启用重绘 (上面把它禁用了).
+return
 
 DM_btnClear:
 LV_Delete()  ; 清理 ListView, 但为了简化保留了图标缓存.
@@ -214,11 +312,52 @@ return
 
 DM_btnRefresh:
 LV_Delete()  ; 清理 ListView, 但为了简化保留了图标缓存.
-gosub LoadFile
+if(isDMHome)
+    gosub LoadFile
+else
+    gosub LoadShortCut
 return
 
 DM_btnClose:
 gosub GuiClose
+return
+
+DM_btnHome:
+if(!isDMHome||isfirstStart){
+    isDMHome:=true
+    isDMSoft:=false
+    isDMFile:=false
+    isShowExt:=true
+    LV_Delete()
+    gosub LoadFile
+    enablePicButton("DM_btnSwitchView",true)
+}
+if(isfirstStart==true)
+    isfirstStart = false
+Return
+
+DM_btnSoft:
+if(!isDMSoft){
+    isDMHome:=false
+    isDMSoft:=true
+    isDMFile:=false
+    isShowExt:=False
+    LV_Delete()
+    gosub LoadShortCut
+    enablePicButton("DM_btnSwitchView",false)
+}
+return
+
+DM_btnFile:
+if(!isDMFile){
+    isDMHome:=false
+    isDMSoft:=false
+    isDMFile:=true
+    isShowExt:=False
+    LV_Delete()
+    gosub LoadShortCut
+    enablePicButton("DM_btnSwitchView",false)
+}
 return
 
 DM_btnMove:
@@ -227,14 +366,16 @@ PostMessage, 0xA1, 2
 return
 
 DM_btnSwitchView:
-if (!IconView){
+if(DM_buttons[A_ThisLabel]["enable"]){
+if (!isIconView){
     GuiControl, +Icon, DM_ListView    ; 切换到图标视图.
 } else {
     GuiControl, +Report, DM_ListView  ; 切换回详细信息视图.
     LV_ModifyCol()  ; 根据内容自动调整每列的大小.
     LV_ModifyCol(3, 60) ; 把 Size 列加宽一些以便显示出它的标题.
 }
-IconView := !IconView             ; 进行反转以为下次做准备.
+isIconView := !isIconView             ; 进行反转以为下次做准备.
+}
 return
 
 DM_ListView:
@@ -243,7 +384,12 @@ if (A_GuiEvent == "DoubleClick"){  ; 脚本还可以检查许多其他的可能�
     if(SelectedRowNumber != 0){ ;有被选中的
         LV_GetText(DM_FileName, A_EventInfo, 1) ; 从首个字段中获取文本.
         LV_GetText(DM_FileDir, A_EventInfo, 2)  ; 从第二个字段中获取文本.
-        Run %DM_FileDir%\%DM_FileName%,, UseErrorLevel
+        if(isShowExt)
+            Run %DM_FileDir%\%DM_FileName%,, UseErrorLevel
+        else{
+            LV_GetText(DM_FileExt, A_EventInfo, 4)  ; 从第4个字段中获取文本.
+            Run %DM_FileDir%\%DM_FileName%.%DM_FileExt%,, UseErrorLevel
+        }
         if ErrorLevel
             MsgBox Could not open "%DM_FileDir%\%DM_FileName%".
     }
@@ -252,27 +398,57 @@ if (A_GuiEvent == "DoubleClick"){  ; 脚本还可以检查许多其他的可能�
 } else if (A_GuiEvent == "e") { ; 完成编辑
     LV_GetText(DM_FileName, A_EventInfo, 1) ; 从首个字段中获取文本.
     LV_GetText(DM_FileDir, A_EventInfo, 2)  ; 从第二个字段中获取文本.
-    res := fileOrFolderRename(DM_FileDir . "\" . DM_OldFileName,DM_FileName)
+    if(isShowExt)
+        res := fileOrFolderRename(DM_FileDir . "\" . DM_OldFileName,DM_FileName)
+    else{
+        LV_GetText(DM_FileExt, A_EventInfo, 4)  ; 从第4个字段中获取文本.
+        res := fileOrFolderRename(DM_FileDir . "\" . DM_OldFileName . "." . DM_FileExt,DM_FileName . "." . DM_FileExt)
+    }
     if(res == false){
         LV_Modify(A_EventInfo, , DM_OldFileName)
     }
-    ; watchdirectory 会监视到更改
+    isDMRenameFile := true
     ; gosub DM_btnRefresh
 }
 return
 
 GuiContextMenu:  ; 运行此标签来响应右键点击或按下 Appskey.
-if A_GuiControl <> DM_ListView  ; 仅在 ListView 中点击时才显示菜单.
+if (A_GuiControl != "DM_ListView")  ; 仅在 ListView 中点击时才显示菜单.
     return
 FocusedRowNumber := LV_GetNext(0, "F")  ; 查找焦点行.
 SelectedRowNumber := LV_GetNext(0)  ; 查找选中的行.
 ; 在提供的坐标处显示菜单, A_GuiX 和 A_GuiY.  应该使用这些
 ; 因为即使用户按下 Appskey 它们也会提供正确的坐标:
-if(SelectedRowNumber != 0){ ;有被选中的
-    Menu, DM_ContextMenu, Show, %A_GuiX%, %A_GuiY%
+if(isDMHome){
+    if(SelectedRowNumber != 0){ ;有被选中的
+        LV_GetText(DM_ext, FocusedRowNumber,4)
+        if DM_ext in % DM_ComExtList
+            Menu, DM_ContextMenu, Enable, % DM_MenuIDecompress
+        else
+            Menu, DM_ContextMenu, Disable, % DM_MenuIDecompress
+        Menu, DM_ContextMenu, Show, %A_GuiX%, %A_GuiY%
+    } else {
+        pid:=DllCall("GetCurrentProcessId","uint")
+        hwnd:=WinExist("ahk_pid " . pid)
+        if(DllCall("OpenClipboard","UPtr",hwnd)){
+            ; 剪切板有文件
+            if(DllCall("IsClipboardFormatAvailable","uint",0xF)){ ; 0xF = CF_HDROP
+                Menu, DM_ContextMenu0, Enable, % DM_MenuIPaste
+            } else{
+                Menu, DM_ContextMenu0, Disable, % DM_MenuIPaste
+            }
+            DllCall("CloseClipboard")
+        }
+        Menu, DM_ContextMenu0, Show, %A_GuiX%, %A_GuiY%
+    }
 } else {
-    Menu, DM_ContextMenu0, Show, %A_GuiX%, %A_GuiY%
+    if(SelectedRowNumber != 0){ ;有被选中的
+        Menu, DM_ContextMenu1, Show, %A_GuiX%, %A_GuiY%
+    }
 }
+return
+
+DM_AddShortcut:
 return
 
 DM_newFiles:
@@ -284,8 +460,13 @@ If (FileExist(DM_fileFullPath)){
     ; 如果扩展名为空，创建文件时windows会自动忽略最后的点号
     ; 为保险还是加了判断
     fileOrFolderCopy(DM_fileFullPath,DM_Folder, dm_filename . (ext==""?"":"." . ext))
+    isDMCreateFile := true
 }
 Return
+
+DM_paste:
+InvokeVerb(DM_Folder, "Paste",False)
+return
 
 DM_CreateFolder:
 FormatTime, DM_DirName,, yyyy-MM-dd [HH.mm.ss]
@@ -293,9 +474,10 @@ DM_newFolder := DM_Folder . "\" . DM_DirName
 ifnotexist DM_newFolder
 {
     FileCreateDir, %DM_newFolder%
+    isDMCreateFile := true
 }
-
 return
+
 DM_OpenFile:  ; 用户在上下文菜单中选择了 "打开".
 DM_Properties:  ; 用户在上下文菜单中选择了 "属性".
 DM_OpenFileDir:  ; 用户在上下文菜单中选择了 "打开所在位置".
@@ -306,16 +488,28 @@ DM_CMD:
 DM_Decompress:
 ; 为了简化, 仅对焦点行进行操作而不是所有选择的行:
 FocusedRowNumber := LV_GetNext(0, "F")  ; 查找焦点行.
-if not FocusedRowNumber  ; 没有焦点行.
+if (FocusedRowNumber==0)  ; 没有焦点行.
     return
 LV_GetText(DM_FileName, FocusedRowNumber, 1) ; 获取首个字段的文本.
 LV_GetText(DM_FileDir, FocusedRowNumber, 2)  ; 获取第二个字段的文本.
-If (A_ThisMenuItem == DM_MenuIOpenFile)   ; 用户在上下文菜单中选择了 "打开".
-    Run %DM_FileDir%\%DM_FileName%,, UseErrorLevel
-else If (A_ThisMenuItem == DM_MenuIOpenFileDir)  ; 用户在上下文菜单中选择了 "打开位置".
-    run Explorer /select`,%DM_FileDir%\%DM_FileName%,,UseErrorLevel
+LV_GetText(DM_FileExt, FocusedRowNumber, 4)  ; 获取第4个字段的文本.
+If (A_ThisMenuItem == DM_MenuIOpenFile){   ; 用户在上下文菜单中选择了 "打开".
+    if(isShowExt)
+        Run %DM_FileDir%\%DM_FileName%,, UseErrorLevel
+    else
+        Run %DM_FileDir%\%DM_FileName%.%DM_FileExt%,, UseErrorLevel
+} else If (A_ThisMenuItem == DM_MenuIOpenFileDir)  ; 用户在上下文菜单中选择了 "打开位置".
+    if(isDMHome)
+        run Explorer /select`,%DM_FileDir%\%DM_FileName%,,UseErrorLevel
+    else{
+        FileGetShortcut, %DM_FileDir%\%DM_FileName%.%DM_FileExt%, OutTarget
+        run Explorer /select`,%OutTarget%,,UseErrorLevel
+    }
 else If (A_ThisMenuItem == DM_MenuIProperties)   ; 用户在上下文菜单中选择了 "属性".
-    Run Properties "%DM_FileDir%\%DM_FileName%",, UseErrorLevel
+    if(isShowExt)
+        Run Properties "%DM_FileDir%\%DM_FileName%",, UseErrorLevel
+    else
+        Run Properties "%DM_FileDir%\%DM_FileName%.%DM_FileExt%",, UseErrorLevel
 else If (A_ThisMenuItem == DM_MenuIRename){   ; 用户在上下文菜单中选择了 "重命名".
     ; PostMessage, LVM_EDITLABEL, FocusedRowNumber-1, 0, SysListView321, % "ahk_id " . hDesktopManager
     ; 下面和上面是等效的
@@ -325,10 +519,15 @@ else If (A_ThisMenuItem == DM_MenuIRename){   ; 用户在上下文菜单中选�
 } else If (A_ThisMenuItem == DM_MenuIGitShell){   ; 用户在上下文菜单中选择了 "git shell".
     cmdHere(DM_gitCmd, DM_FileDir . "\" . DM_FileName)
 } else If (A_ThisMenuItem == DM_MenuICMD){   ; 用户在上下文菜单中选择了 "命令行".
-    cmdHere(DM_cmdCmd, DM_FileDir . "\" . DM_FileName)
-} else If (A_ThisMenuItem == DM_MenuIDecompress){   ; 用户在上下文菜单中选择了 "命令行".
+    if(isShowExt)
+        cmdHere(DM_cmdCmd, DM_FileDir . "\" . DM_FileName)
+    else{
+        FileGetShortcut, %DM_FileDir%\%DM_FileName%.%DM_FileExt%, OutTarget
+        cmdHere(DM_cmdCmd, OutTarget)
+    }
+} else If (A_ThisMenuItem == DM_MenuIDecompress){   ; 用户在上下文菜单中选择了 "解压缩".
     LV_GetText(DM_FileExt, FocusedRowNumber, 4)  ; 获取第二个字段的文本.
-    if DM_FileExt in % DM_ExtList
+    if DM_FileExt in % DM_ComExtList
     {
         decompressFile(DM_decompressCmd, DM_FileDir . "\" . DM_FileName)
     }
@@ -337,6 +536,22 @@ if (ErrorLevel) {
     myToolTip("对" . DM_FileDir . "\" . DM_FileName . "执行命令失败")
 }
 return
+
+DM_SystemContextMenu:
+FocusedRowNumber := LV_GetNext(0, "F")  ; 查找焦点行.
+SelectedRowNumber := LV_GetNext(0)  ; 查找选中的行.
+if( FocusedRowNumber != 0){
+    LV_GetText(DM_FileName, FocusedRowNumber, 1) ; 获取首个字段的文本.
+    LV_GetText(DM_FileDir, FocusedRowNumber, 2)
+}  ; 获取第二个字段的文本.
+If (A_ThisMenuItem == DM_MenuISystemContextMenu){   ; 用户在上下文菜单中选择了 "系统菜单".
+    if (SelectedRowNumber == 0) {
+        ShellContextMenu(DM_Folder)
+    } else {
+        ShellContextMenu(DM_FileDir . "\" . DM_FileName)
+    }
+}
+Return
 
 DM_ClearRows:  ; 用户在上下文菜单中选择了 "Clear".
 RowNumber = 0  ; 这会使得首次循环从顶部开始搜索.
@@ -370,10 +585,11 @@ Loop
 }
 StringTrimRight, FileFullNames, FileFullNames, 1
 If (A_ThisMenuItem == DM_MenuICopy){   ; 用户在上下文菜单中选择了 "复制".
-    FileToClipboard(FileFullNames)
+    FilesToClipboard(FileFullNames)
 } else If (A_ThisMenuItem == DM_MenuICut){   ; 用户在上下文菜单中选择了 "剪切".
-    FileToClipboard(FileFullNames,"cut")
+    FilesToClipboard(FileFullNames,1)
 }
+FileFullNames:=
 Return
 
 DM_Compress:
@@ -398,30 +614,56 @@ StringTrimRight, FileFullNames, FileFullNames, 1
 If (A_ThisMenuItem == DM_MenuICompress){   ; 用户在上下文菜单中选择了 "压缩".
     comPressFiles(DM_compressCmd, FileFullNames,DM_fileCount)
 }
+FileFullNames :=
 Return
 
 DM_Delete:
 RowNumber = 0  ; 这会使得首次循环从顶部开始搜索.
-Loop
-{
-    ; 由于删除了一行使得此行下面的所有行的行号都减小了,
-    ; 所以把行号减 1, 这样搜索里包含的行号才会与之前找到的行号相一致
-    ; (以防选择了相邻行):
-    RowNumber := LV_GetNext(RowNumber - 1)
-    if not RowNumber  ; 上面返回零, 所以没有更多选择的行了.
-        break
-    LV_GetText(DM_FileName, RowNumber, 1) ; 从首个字段中获取文本.
-    LV_GetText(DM_FileDir, RowNumber, 2)  ; 从第二个字段中获取文本.
-    FileFullName := DM_FileDir . "\" . DM_FileName
-    FileRecycle, %FileFullName%
-    ; watchdirectory 会更新界面
-    ; MsgBox, 4,, Would you like to Delete %FileFullName%? (press Yes or No)
-    ; IfMsgBox Yes 
-    ; {
-        ; FileRecycle, %FileFullName%
-        ; LV_Delete(RowNumber)  ; 从 ListView 中删除行.
-    ; }
+WatchDirectory("")
+if(isDMHome){
+    Loop
+    {
+        ; 由于删除了一行使得此行下面的所有行的行号都减小了,
+        ; 所以把行号减 1, 这样搜索里包含的行号才会与之前找到的行号相一致
+        ; (以防选择了相邻行):
+        RowNumber := LV_GetNext(RowNumber - 1)
+        if not RowNumber  ; 上面返回零, 所以没有更多选择的行了.
+            break
+        LV_GetText(DM_FileName, RowNumber, 1) ; 从首个字段中获取文本.
+        LV_GetText(DM_FileDir, RowNumber, 2)  ; 从第二个字段中获取文本.
+        FileFullName := DM_FileDir . "\" . DM_FileName
+        FileRecycle, %FileFullName%
+        If (ErrorLevel == 1){
+            ; myToolTip("无法删除")
+            ; 跳出循环，否则获取 Rownumber 一直一样,会死循环
+            break
+        }
+    }
+    WatchDirectory(DM_Folder,"ReportChanges")
+}else{
+    Loop
+    {
+        ; 由于删除了一行使得此行下面的所有行的行号都减小了,
+        ; 所以把行号减 1, 这样搜索里包含的行号才会与之前找到的行号相一致
+        ; (以防选择了相邻行):
+        RowNumber := LV_GetNext(RowNumber - 1)
+        if not RowNumber  ; 上面返回零, 所以没有更多选择的行了.
+            break
+        LV_GetText(DM_FileName, RowNumber, 1) ; 从首个字段中获取文本.
+        LV_GetText(DM_FileDir, RowNumber, 2)  ; 从第二个字段中获取文本.
+        LV_GetText(DM_FileExt, RowNumber, 4)  ; 从第4个字段中获取文本.
+        FileFullName := DM_FileDir . "\" . DM_FileName . "." . DM_FileExt
+        FileRecycle, %FileFullName%
+        If (ErrorLevel == 1){
+            ; myToolTip("无法删除")
+            ; 跳出循环，否则获取 Rownumber 一直一样,会死循环
+            break
+        }
+    }
+    WatchDirectory(curShortcutDir,"ReportChanges")
 }
+; 如果在删除过程中还有其它操作，需要刷新一次，以显示最新的文件
+gosub DM_btnRefresh
 Return
 
 GuiSize:  ; 扩大或缩小 ListView 来响应用户对窗口大小的改变.
@@ -435,12 +677,32 @@ GuiClose:  ; 当窗口关闭时, 自动退出脚本:
 ExitApp
 
 GuiDropFiles:
-Loop, parse, A_GuiEvent, `n
-{
-    fileOrFolderMove(A_LoopField,DM_Folder)
+if(A_GuiControl == "DM_ListView"){
+    ; 在拖拽移动文件前，停止监视目录，否则界面会多出图标
+    if(isDMHome){
+        WatchDirectory("")
+        Loop, parse, A_GuiEvent, `n
+        {
+            fileOrFolderMove(A_LoopField,DM_Folder)
+            DM_addFile(A_LoopField,isShowExt)
+        }
+        WatchDirectory(DM_Folder,"ReportChanges")
+    } else {
+        WatchDirectory("")
+        Loop, parse, A_GuiEvent, `n
+        {
+            SplitPath ,A_LoopField,,,,FileNameNoExt
+            newPath:=curShortcutDir . "\" . FileNameNoExt . ".lnk"
+            if(!FileExist(newPath)){
+                FileCreateShortcut, %A_LoopField%, %newPath%
+                DM_addFile(newPath,isShowExt)
+            }
+        }
+        WatchDirectory(curShortcutDir,"ReportChanges")
+    }
 }
-LV_Delete() 
-gosub, LoadFile
+; 过程中还有其它操作，需要刷新一次，以显示最新的文件
+gosub DM_btnRefresh
 Return
 
 
@@ -449,7 +711,10 @@ DM_CheckText:
 SetTimer %A_ThisLabel%,Off
 Gui, Submit, NoHide
 LV_Delete() 
-gosub, LoadFile
+if(isDMHome)
+    gosub, LoadFile
+else
+    gosub, LoadShortCut
 return
 
 ; 双击桌面隐藏、显示桌面图标
@@ -458,10 +723,15 @@ return
  If ( A_PriorHotKey = A_ThisHotKey && A_TimeSincePriorHotkey < 400 ) {
    WinGetClass, Class, A
    If Class in Progman,WorkerW
-   var := (flag=0) ? "Show" : "Hide"
-   flag := !flag
-   Control,%var%,, SysListView321, ahk_class Progman
-   Control,%var%,, SysListView321, ahk_class WorkerW
+   {
+    var := (flag=0) ? "Show" : "Hide"
+   ControlGet, SelectedCount, List, Count Selected, SysListView321, ahk_class  %Class%
+    if(SelectedCount == 0){
+        flag := !flag
+        Control,%var%,, SysListView321, ahk_class Progman
+        Control,%var%,, SysListView321, ahk_class WorkerW
+    }
+   }
 }
 Return
 
@@ -493,6 +763,9 @@ DM_ToggleButton(show){
     GuiControl, show%show%, DM_btnRefresh
     GuiControl, show%show%, DM_btnMove
     GuiControl, show%show%, DM_btnClose
+    GuiControl, show%show%, DM_btnHome
+    GuiControl, show%show%, DM_btnSoft
+    GuiControl, show%show%, DM_btnFile
 }
 ; FUNCTION TO HANDLE BOTH TOOLTIP AND MOUSEOVER EVENT 
 DM_WM_MOUSEMOVE() 
@@ -510,23 +783,26 @@ DM_WM_MOUSEMOVE()
             DM_ToggleButton(DM_btnIsShow)
         }
     }
+    ; 上一个控件是图片按钮，则恢复正常
     If (StrLen(PrevControl) && DM_buttons.HasKey(PrevControl) && CurrControl != PrevControl) 
     { 
         ; 清空提示
         ToolTip
         GuiControl,, % PrevControl, % DM_buttons[PrevControl]["picpre"] . "." . DM_buttons[PrevControl]["pictype"]
     }
+    ; 当前控件是图片按钮，显示激活的图片,并显示提示
     If (StrLen(CurrControl) && DM_buttons.HasKey(CurrControl) && CurrControl != PrevControl) 
     { 
         ; The leading percent sign tell it to use an expression. 
         mytoolTip(DM_buttons[CurrControl]["tipinfo"])
-        GuiControl,, % CurrControl, % DM_buttons[CurrControl]["picpre"] . "_over." . DM_buttons[CurrControl]["pictype"] 
+        if(DM_buttons[CurrControl]["enable"])
+            GuiControl,, % CurrControl, % DM_buttons[CurrControl]["picpre"] . "_over." . DM_buttons[CurrControl]["pictype"] 
     } 
     PrevControl := CurrControl 
     return 
 } 
 
-addPicButton(label,picPrefix,picType="png",option="",tooltipInfo="")
+addPicButton(label,picPrefix,picType="png",option="",tooltipInfo="", enable:=true)
 {
 	global
 	local hwndget
@@ -538,11 +814,46 @@ addPicButton(label,picPrefix,picType="png",option="",tooltipInfo="")
 	DM_buttons[label,"pictype"] := picType
 	DM_buttons[label,"picpre"]  := picPrefix
 	DM_buttons[label,"label"]   := label
+	DM_buttons[label,"enable"]   := enable
     DM_buttons[label,"tipinfo"] := tooltipInfo
 	Return, buttonIndex
 }
+
+enablePicButton(label, enable:=true){
+    global DM_buttons
+    DM_buttons[label,"enable"] := enable
+}
+InvokeVerb(path, menu, validate=True) {
+   ;by A_Samurai
+   ;v 1.0.1 http://sites.google.com/site/ahkref/custom-functions/invokeverb
+    objShell := ComObjCreate("Shell.Application")
+    if InStr(FileExist(path), "D") || InStr(path, "::{") {
+        objFolder := objShell.NameSpace(path)   
+        objFolderItem := objFolder.Self
+    } else {
+        SplitPath, path, name, dir
+        objFolder := objShell.NameSpace(dir)
+        objFolderItem := objFolder.ParseName(name)
+    }
+    if validate {
+        colVerbs := objFolderItem.Verbs   
+        loop % colVerbs.Count {
+            verb := colVerbs.Item(A_Index - 1)
+            retMenu := verb.name
+            retMenu := RegExReplace(retMenu, "\(&.*\)", "")
+            ; StringReplace, retMenu, retMenu, &       
+            if (retMenu == menu) {
+                verb.DoIt
+                Return True
+            }
+        }
+        Return False
+    } else {
+        objFolderItem.InvokeVerbEx(Menu)
+    }
+}
 ; http://www.autohotkey.com/board/topic/23162-how-to-copy-a-file-to-the-clipboard/page-4
-FileToClipboard(PathToCopy,Method="copy",delim="`n",omit = "`r")
+FilesToClipboard(PathToCopy,iscut=0,delim="`n",omit = "`r")
 {
     FileCount:=0
     PathLength:=0
@@ -575,9 +886,9 @@ FileToClipboard(PathToCopy,Method="copy",delim="`n",omit = "`r")
     mem := DllCall("GlobalAlloc","uint",0x42,"uint",4,"UPtr")
     str := DllCall("GlobalLock","UPtr",mem)
 
-    if (Method="copy")
+    if (iscut==0)
         DllCall("RtlFillMemory","UPtr",str,"uint",1,"UChar",0x05)
-    else if (Method="cut")
+    else if (iscut=1)
         DllCall("RtlFillMemory","UPtr",str,"uint",1,"UChar",0x02)
     else
     {
@@ -592,8 +903,10 @@ FileToClipboard(PathToCopy,Method="copy",delim="`n",omit = "`r")
     DllCall("CloseClipboard")
     return
 }
+
+
 ; 添加一个文件到列表，如果FileName为空，则在函数中获取后三个参数的值
-DM_addFile(FileFullName,FileName="", FileDir="", FileSizeKB="")
+DM_addFile(FileFullName,isShowExt:=true,FileName="", FileDir="", FileSizeKB="")
 {
     global
     local FileExt,ExtID,IconNumber,ExtChar,hIcon,FileNameTmp,FileDirTmp
@@ -601,13 +914,20 @@ DM_addFile(FileFullName,FileName="", FileDir="", FileSizeKB="")
     ; 建立唯一的扩展 ID 以避免变量名中的非法字符,
     ; 例如破折号.  这种使用唯一 ID 的方法也会执行地更好,
     ; 因为在数组中查找项目不需要进行搜索循环.
-    SplitPath, FileFullName,FileNameTmp,FileDirTmp, FileExt  ; 获取文件扩展名.
+    SplitPath, FileFullName,FileNameTmp,FileDirTmp, FileExt,FileNameNoExt  ; 获取文件扩展名.
     if (!StrLen(FileName)) {
         FileName   := FileNameTmp
+    }
+    if(!isShowExt){
+        FileName := FileNameNoExt
+    }
+    if (!StrLen(FileDir)) {
         FileDir    := FileDirTmp
+    }
+    if (!StrLen(FileSizeKB)) {
         FileGetSize, FileSizeKB, FileFullName, K 
     }
-    if FileExt in EXE,ICO,ANI,CUR
+    if FileExt in EXE,ICO,ANI,CUR,LNK
     {
         ExtID := FileExt  ; 特殊 ID 作为占位符.
         IconNumber = 0  ; 进行标记这样每种类型就含有唯一的图标.
@@ -796,14 +1116,15 @@ decomPressFile(decompressCmd,FileFullPath){
         myToolTip(FileFullPath . "不存在")
         Return false
     }
-    FileSelectFolder, Folder,, 3, 选择解压目录
+    SplitPath FileFullPath,,filedir
+    FileSelectFolder, Folder,% "*" . filedir, 3, 选择解压目录
     if (Folder == ""){ ; 用户取消了对话框.
         ; myToolTip("没有选择目录")
         return false
     }
         
     run % decompressCmd . " """ . FileFullPath . """ -o" . Folder , ,UseErrorLevel Hide
-    if (ErrorLevel == "ERROR"){
+    if (ErrorLevel == "ERROR" && Folder != filedir){
         myToolTip("解压缩" . FileFullPath . "失败")
         return false
     }
@@ -815,18 +1136,74 @@ myToolTip(tipinfo, delayTime=2000){
 }
 
 ReportChanges(from,to){
-    global hDM_ListView,LVM_EDITLABEL
+    global hDM_ListView,LVM_EDITLABEL,isDMCreateFile,isDMRenameFile,isShowExt,hDesktopManager
     if(from == "" && to != ""){
-        ; 新建文件
-        RowNumber := DM_addFile(to)
-        LV_Modify(RowNumber, "+Focus")
-        PostMessage, LVM_EDITLABEL, RowNumber-1, 0, , % "ahk_id " . hDM_ListView
+        ; 新增文件
+        RowNumber := DM_addFile(to,isShowExt)
+        if(isDMCreateFile){
+            LV_Modify(RowNumber, "+Focus")
+            PostMessage, LVM_EDITLABEL, RowNumber-1, 0, , % "ahk_id " . hDM_ListView
+            isDMCreateFile := False
+        }
     } else if(to == "" && from != ""){
         ; 删除文件
-        ; TODO:删除多个文件闪烁明显
-        gosub DM_btnRefresh
+        if(isShowExt)
+            SplitPath, from, oldfilename
+        else
+            SplitPath, from,,,, oldfilename
+        RowNumber:=1
+        Loop
+        {
+            ; 失败返回0
+            if (!LV_GetText(firstColText, RowNumber))
+                break
+            if(oldfilename == firstColText) {
+                break
+            }
+            RowNumber++
+        }
+        if(RowNumber!=0)
+            LV_Delete(RowNumber)
+        ; gosub DM_btnRefresh
     } else if(from != to){
         ; 重命名
-        gosub DM_btnRefresh
+        if(!isDMRenameFile){
+            isDMRenameFile := False
+            if(isShowExt){
+                SplitPath, from, oldfilename
+                SplitPath, to, newfilename
+            }else{
+                SplitPath, from,,,, oldfilename
+                SplitPath, to,,,, newfilename
+            }
+            ; 983个文件 0 毫秒
+            RowNumber:=1
+            Loop
+            {
+                ; 失败返回0
+                if (!LV_GetText(firstColText, RowNumber))
+                    break
+                if(oldfilename == firstColText) {
+                    break
+                }
+                RowNumber++
+            }
+            LV_Modify(RowNumber, , newfilename)
+            /*
+            ; 983个文件重命名最后一个 234毫秒 即使第一个也耗时171毫秒，controlget比较耗时
+            ControlGet, listNames, List, Col1, SysListView321, ahk_id %hDesktopManager% 
+            RowNumber:= 0
+            Loop, Parse, listNames , `n
+            {
+               if(oldfilename == A_LoopField) {
+                    RowNumber := A_Index
+                    break
+               }
+            }
+            if(RowNumber != 0)
+                LV_Modify(RowNumber, , newfilename)
+            */
+        }
+        ; gosub DM_btnRefresh
     }
 }
