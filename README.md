@@ -9,7 +9,7 @@
 
 ## 安装
 
-本软件是绿色软件，复制到任何地方都可以运行。下载:<http://pan.baidu.com/s/1jG5e0IU>
+本软件是绿色软件，复制到任何地方都可以运行。下载:<http://pan.baidu.com/s/1kTFlT8z>
 
 ## 配置
 

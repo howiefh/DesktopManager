@@ -10,7 +10,7 @@
 #SingleInstance, force
 #include include\WatchDirectory.ahk
 #include include\ShellContextMenu.ahk
-version:="1.0.0"
+version:="1.1.0"
 FileRead, ver, version.txt
 if(ver!=version || !FileExist("DesktopManager.ini"))
 {
@@ -42,6 +42,7 @@ FileInstall, templates\Microsoft Excel 工作表.xlsx  , %a_workingdir%\template
 FileInstall, templates\Microsoft Word 文档.docx       , %a_workingdir%\templates\Microsoft Word 文档.docx       , 1
 FileInstall, templates\文本文档.txt               , %a_workingdir%\templates\文本文档.txt               , 1
 FileInstall, DesktopManager.ini, %a_workingdir%\DesktopManager.ini, 1
+filedelete , version.txt
 FileAppend , %version%, version.txt
 }
 ; 下面是一个比此页面顶部附近那个更精巧的可运行脚本.
@@ -59,7 +60,8 @@ IniRead , DM_cmdCmd      , %DM_iniFilename% , %DM_gsection% , cmdCmd
 IniRead , DM_compressCmd , %DM_iniFilename% , %DM_gsection% , compressCmd
 ; DM_decompressCmd:= """D:\Applications\HaoZip\HaoZip.exe"" "
 IniRead , DM_decompressCmd , %DM_iniFilename% , %DM_gsection% , decompressCmd
-IniRead , DM_CompExtList    , %DM_iniFilename% , %DM_gsection% , compExtList
+IniRead , DM_CompExtList    , %DM_iniFilename% , %DM_gsection% , compExtList, zip,7z,rar,gz,tar,bz,bz2,bzip2,deb,001
+IniRead , DM_EditExtList, %DM_iniFilename% , %DM_gsection% , editExtList, doc,docx,ppt,pptx,xls,xlsx,txt,md,ahk,c,h,cpp,java,ini,xml,html,css,js
 IniRead , DM_templatesDir  , %DM_iniFilename% , %DM_gsection% , templatesDir  , templates
 IniRead , DM_shortcutDir, %DM_iniFilename% , %DM_gsection% , shortcutDir, shortcut
 
@@ -78,7 +80,7 @@ if(DM_sizeH == ""){
     DM_sizeH   := A_ScreenHeight - 40
 }
 if(DM_Folder==""){
-    DM_Folder:="DM"
+    DM_Folder:= a_workingdir . "\DMFiles"
 }
 ifnotexist % DM_Folder 
 {
@@ -104,6 +106,7 @@ ifnotexist % DM_shortcutDir
 
 DM_lsection := "DMLang"
 IniRead, DM_MenuIOpenFile          , %DM_iniFilename%, %DM_lsection%, MenuIOpenFile         , 打开
+IniRead, DM_MenuIEditFile          , %DM_iniFilename%, %DM_lsection%, MenuIEditFile         , 编辑
 IniRead, DM_MenuIOpenFileDir       , %DM_iniFilename%, %DM_lsection%, MenuIOpenFileDir      , 打开所在位置
 IniRead, DM_MenuIGitShell          , %DM_iniFilename%, %DM_lsection%, MenuIGitShell         , Git shell
 IniRead, DM_MenuICMD               , %DM_iniFilename%, %DM_lsection%, MenuICMD              , 命令行
@@ -163,6 +166,10 @@ isDMFile := false
 ; 如果是按f12显示的话，鼠标移动不会改变按钮隐藏或显示
 DM_btnIsAlwaysShow := DM_btnIsShow := false
 
+LVM_SETEXTENDEDLISTVIEWSTYLE  := 0x1036
+LVM_SETHOVERTIME              := 0x1047
+LVS_EX_TRACKSELECT            := 0x00000008
+
 LVM_EDITLABELA := 0x1017
 LVM_EDITLABELW := 0x1076
 LVM_EDITLABEL := A_IsUnicode ? LVM_EDITLABELW : LVM_EDITLABELA
@@ -215,6 +222,7 @@ LV_SetImageList(DM_ImageListID2)
 
 ; 创建作为上下文菜单的弹出菜单:
 Menu, DM_ContextMenu, Add, % DM_MenuIOpenFile, DM_OpenFile
+Menu, DM_ContextMenu, Add, % DM_MenuIEditFile, DM_EditFile
 Menu, DM_ContextMenu, Add, % DM_MenuIOpenFileDir, DM_OpenFileDir
 if(DM_compressCmd!="")
     Menu, DM_ContextMenu, Add, % DM_MenuICompress, DM_Compress
@@ -248,7 +256,7 @@ Loop %DM_templatesDir%\* ,1  ;获取目录下文件和文件夹，默认为0仅�
     Menu, DM_ContextMenuNewFile, Add, % DM_filename_no_ext, DM_newFiles
 }
 
-Menu, DM_ContextMenu0, Add, % DM_MenuIRefresh, DM_btnRefresh
+Menu, DM_ContextMenu0, Add, % DM_MenuIRefresh, DM_menuRefresh
 Menu, DM_ContextMenu0, Add, % DM_MenuIPaste, DM_Paste
 Menu, DM_ContextMenu0, Add, % DM_MenuINew, :DM_ContextMenuNewFile
 Menu, DM_ContextMenu0, Add, % DM_MenuISystemContextMenu, DM_SystemContextMenu
@@ -317,10 +325,10 @@ DM_AddShortcut:
 Gui, gShortcut:New
 Gui, gShortcut:-Resize +ToolWindow
 Gui, gShortcut:Add, ListBox, x22 y20 w340 h310 Multi AltSubmit vDM_ListBox hwndhDM_ListBox, 
-Gui, gShortcut:Add, CheckBox, x22 y340 w120 h20 gDM_isAll vDM_isAll, All/Deselect All
-Gui, gShortcut:Add, Button, x152 y340 w60 h20 gDM_AddFile, Add File
-Gui, gShortcut:Add, Button, x222 y340 w60 h20 gDM_AddFolder vDM_AddFolder, Add Dir.
-Gui, gShortcut:Add, Button, x292 y340 w60 h20 gDM_AddOK, OK
+Gui, gShortcut:Add, CheckBox, x22 y340 w120 h20 gDM_SCisAll vDM_isAll, All/Deselect All
+Gui, gShortcut:Add, Button, x152 y340 w60 h20 gDM_SCAddFile, Add File
+Gui, gShortcut:Add, Button, x222 y340 w60 h20 gDM_SCAddFolder vDM_AddFolder, Add Dir.
+Gui, gShortcut:Add, Button, x292 y340 w60 h20 gDM_SCAddOK, OK
 ;================================
 ; 添加快捷方式窗口 end
 ;================================
@@ -357,7 +365,7 @@ initShortcutCount:=Shortcutcount
 Gui, gShortcut:Show, w390 h386, 选择添加的项目
 return
 
-DM_isAll:
+DM_SCisAll:
 Gui ,gShortcut:+LastFound  ; 让后面不需要指定 WinTitle.
 Gui, gShortcut:Submit,NoHide
 if(DM_isAll==1){
@@ -367,7 +375,7 @@ if(DM_isAll==1){
 }
 return
 
-DM_AddFolder:
+DM_SCAddFolder:
 Gui gShortcut:+OwnDialogs  ; 强制用户解除此对话框后才可以操作主窗口.
 FileSelectFolder, SelectedFolder,, 3, 添加目录
 if( SelectedFolder == ""){ ; 用户取消了对话框.
@@ -379,7 +387,7 @@ SplitPath,SelectedFolder,,,,FileNameNoExt
 GuiControl, gShortcut:, DM_ListBox, %FileNameNoExt%||
 Return
 
-DM_AddFile:
+DM_SCAddFile:
 Gui gShortcut:+OwnDialogs  ; 强制用户解除此对话框后才可以操作主窗口.
 if(isDMSoft){
     FileSelectFile, SelectedFile,  M11, , 选择文件, Executable Files(*.exe)
@@ -408,7 +416,7 @@ Loop, parse, SelectedFile, `n
 GuiControl, gShortcut:, DM_ListBox, % SelectedFiles
 return
 
-DM_AddOK:
+DM_SCAddOK:
 Gui, gShortcut:Submit,NoHide
 Loop, parse, DM_ListBox, |
 {
@@ -432,9 +440,13 @@ DM_btnLoadFolder:
 if(!DM_buttons["DM_btnLoadFolder"]["enable"])
     return
 Gui DMMain:+OwnDialogs  ; 强制用户解除此对话框后才可以操作主窗口.
+DM_temp:=DM_Folder
 FileSelectFolder, DM_Folder,, 3, 选择目录加载
 if not DM_Folder  ; 用户取消了对话框.
+{
+    DM_Folder:=DM_temp
     return
+}
 gosub DM_btnRefresh
 Return
 
@@ -464,6 +476,8 @@ WatchDirectory(DM_Folder,"ReportChanges")
 return
 
 LoadShortCut:
+; dm_addfile函数有对listview操作 所以需要设置为default
+Gui, DMMain:Default
 if(isDMSoft){
     curShortcutDir := DM_SoftShortcutDir
 } else {
@@ -487,6 +501,8 @@ DM_btnClear:
 LV_Delete()  ; 清理 ListView, 但为了简化保留了图标缓存.
 return
 
+DM_menuRefresh:
+Gui, DMMain: Default
 DM_btnRefresh:
 LV_Delete()  ; 清理 ListView, 但为了简化保留了图标缓存.
 if(isDMHome)
@@ -590,7 +606,60 @@ if (A_GuiEvent == "DoubleClick"){  ; 脚本还可以检查许多其他的可能�
     }
     isDMRenameFile := true
     ; gosub DM_btnRefresh
+} else If (A_GuiEvent == "D" && isDMHome) {      ; 拖拽事件
+    DragItems:=
+    DragItems:=Object()
+    RowNumber := 0
+    count:=0
+    Loop
+    {
+        RowNumber := LV_GetNext(RowNumber)  ; 在前一次找到的位置后继续搜索.
+        if not RowNumber  ; 上面返回零, 所以选择的行已经都找到了.
+            break
+        LV_GetText(Text, RowNumber)
+        DragItems[A_Index]:=Text
+        count:=A_Index
+    }
+    DragTip:=count . " file" . (count>1?"s":"")
+    ; Set list-view ex-style LVS_EX_TRACKSELECT on the target control
+    SendMessage, LVM_SETEXTENDEDLISTVIEWSTYLE, LVS_EX_TRACKSELECT, LVS_EX_TRACKSELECT, , ahk_id %hDM_ListView%
+    ; Set hover time to 10 ms
+    SendMessage, LVM_SETHOVERTIME, 0, 10, , ahk_id %hDM_ListView% ; Set hovertime to 10 ms
+    SetTimer, DDToolTip, 25
+    KeyWait, LButton
+    ; Remove list-view ex-style LVS_EX_TRACKSELECT
+    SendMessage, LVM_SETEXTENDEDLISTVIEWSTYLE, LVS_EX_TRACKSELECT, 0, , ahk_id %hDM_ListView%
+    SetTimer, DDToolTip, off
+    ToolTip
+    RowNumber := 0
+    RowNumber := LV_GetNext(RowNumber)  ; 在前一次找到的位置后继续搜索.
+    LV_GetText(DM_FileName, RowNumber,1)
+    LV_GetText(DM_FileDir, RowNumber,2)
+    FileFullName:=DM_FileDir . "\" . DM_FileName
+    Loop % count
+    {
+        if(DragItems[A_Index]==DM_FileName){
+            DragItems:=
+            Return
+        }
+    }
+	if (InStr(FileExist(FileFullName),"D")){
+        myToolTip("移动到" . FileFullName)
+        Loop % count
+        {
+            fileOrFolderMove(DM_FileDir . "\" . DragItems[A_Index],FileFullName)
+        }
+    }
+    DragItems:=
 }
+return
+
+DDToolTip:
+	ToolTip, %DragTip% ; Shows the dragged item next to the mousepointer
+Return
+Killtip:
+	SetTimer, DDToolTip, Off
+	ToolTip
 return
 
 DMMainGuiContextMenu:  ; 运行此标签来响应右键点击或按下 Appskey.
@@ -609,6 +678,10 @@ if(isDMHome){
             else
                 Menu, DM_ContextMenu, Disable, % DM_MenuIDecompress
         }
+        if DM_ext in % DM_EditExtList
+            Menu, DM_ContextMenu, Enable, % DM_MenuIEditFile
+        else
+            Menu, DM_ContextMenu, Disable, % DM_MenuIEditFile
         Menu, DM_ContextMenu, Show, %A_GuiX%, %A_GuiY%
     } else {
         pid:=DllCall("GetCurrentProcessId","uint")
@@ -661,6 +734,7 @@ ifnotexist % DM_newFolder
 return
 
 DM_OpenFile:  ; 用户在上下文菜单中选择了 "打开".
+DM_EditFile:
 DM_Properties:  ; 用户在上下文菜单中选择了 "属性".
 DM_OpenFileDir:  ; 用户在上下文菜单中选择了 "打开所在位置".
 DM_Rename:
@@ -683,6 +757,28 @@ If (A_ThisMenuItem == DM_MenuIOpenFile){   ; 用户在上下文菜单中选择�
         Run %DM_FileDir%\%DM_FileName%,, UseErrorLevel
     else
         Run %DM_FileDir%\%DM_FileName%.%DM_FileExt%,, UseErrorLevel
+} else If (A_ThisMenuItem == DM_MenuIEditFile){   ; 用户在上下文菜单中选择了 "编辑".
+    if DM_FileExt in % DM_EditExtList
+    {
+        FileFullName:=DM_FileDir . "\" . DM_FileName
+        InvokeVerb(FileFullName, "Edit",False)
+    }
+/*
+    if(isShowExt)
+        FileFullName:=DM_FileDir . "\" . DM_FileName
+    else{
+        FileFullName:=DM_FileDir . "\" . DM_FileName . "." . DM_FileExt
+    }
+    SplitPath , FileFullName ,,,FileExt
+    ; 如果是链接，获取链接到的文件
+    if(FileExt=="lnk"){
+        FileGetShortcut, FileFullName, targetFile
+        FileFullName:=targetFile
+        SplitPath , FileFullName ,,,FileExt
+    }
+    if FileExt in % EditFileExts
+        InvokeVerb(FileFullName, "Edit",False)
+*/
 } else If (A_ThisMenuItem == DM_MenuIOpenFileDir)  ; 用户在上下文菜单中选择了 "打开位置".
     if(isDMHome)
         run Explorer /select`,%DM_FileDir%\%DM_FileName%,,UseErrorLevel
@@ -823,7 +919,7 @@ if(isDMHome){
         ; 由于删除了一行使得此行下面的所有行的行号都减小了,
         ; 所以把行号减 1, 这样搜索里包含的行号才会与之前找到的行号相一致
         ; (以防选择了相邻行):
-        RowNumber := LV_GetNext(RowNumber - 1)
+        RowNumber := LV_GetNext(RowNumber)
         if not RowNumber  ; 上面返回零, 所以没有更多选择的行了.
             break
         LV_GetText(DM_FileName, RowNumber, 1) ; 从首个字段中获取文本.
@@ -1109,7 +1205,6 @@ DM_addFile(FileFullName,isShowExt:=true,FileName="", FileDir="", FileSizeKB="")
 {
     global
     local FileExt,ExtID,IconNumber,ExtChar,hIcon,FileNameTmp,FileDirTmp
-    Gui, DMMain:Default
 
     ; 建立唯一的扩展 ID 以避免变量名中的非法字符,
     ; 例如破折号.  这种使用唯一 ID 的方法也会执行地更好,
@@ -1127,6 +1222,10 @@ DM_addFile(FileFullName,isShowExt:=true,FileName="", FileDir="", FileSizeKB="")
     if (!StrLen(FileSizeKB)) {
         FileGetSize, FileSizeKB, FileFullName, K 
     }
+    ; 如果是文件夹,显示folder
+	if InStr(FileExist(FileFullName),"D"){
+       	FileExt := "Folder"
+	}
     if FileExt in EXE,ICO,ANI,CUR,LNK
     {
         ExtID := FileExt  ; 特殊 ID 作为占位符.
@@ -1169,10 +1268,6 @@ DM_addFile(FileFullName,isShowExt:=true,FileName="", FileDir="", FileSizeKB="")
         }
     }
 
-    ; 如果是文件夹,显示folder
-	if InStr(FileExist(FileFullName),"D"){
-       	FileExt := "Folder"
-	}
 
     ; 在 ListView 中创建新行并把它和上面的图标编号进行关联:
     Return LV_Add("Icon" . IconNumber, FileName, FileDir, FileSizeKB, FileExt)
