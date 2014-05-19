@@ -10,7 +10,7 @@
 #SingleInstance, force
 #include include\WatchDirectory.ahk
 #include include\ShellContextMenu.ahk
-version:="1.1.0"
+version:="1.2.0"
 FileRead, ver, version.txt
 if(ver!=version || !FileExist("DesktopManager.ini"))
 {
@@ -72,19 +72,39 @@ IniRead , DM_isIconView       , %DM_iniFilename% , %DM_gsection% , isIconView   
 IniRead , DM_bgColor , %DM_iniFilename% , %DM_gsection% , bgColor , 000000
 IniRead , DM_sizeW   , %DM_iniFilename% , %DM_gsection% , sizeW   , 710
 IniRead , DM_sizeH   , %DM_iniFilename% , %DM_gsection% , sizeH   , % A_ScreenHeight - 40
-IniRead , DM_fontC   , %DM_iniFilename% , %DM_gsection% , fontC   , ffffff
 if(DM_sizeW == ""){
     DM_sizeW   := 710
 }
 if(DM_sizeH == ""){
     DM_sizeH   := A_ScreenHeight - 40
 }
+IniRead , DM_fontC   , %DM_iniFilename% , %DM_gsection% , fontC   , ffffff
+IniRead , DM_X, %DM_iniFilename%, %DM_gsection%, WinX, % A_ScreenWidth - DM_sizeW
+IniRead , DM_Y, %DM_iniFilename%, %DM_gsection%, WinY, 0
+if(DM_X == ""){
+    DM_X := A_ScreenWidth - DM_sizeW
+}
+if(DM_Y == ""){
+    DM_Y := 0
+}
+IniRead , DM_isAutoStart, %DM_iniFilename% , %DM_gsection% , isAutoStart, 1
+IniRead , DM_isLinks, %DM_iniFilename% , %DM_gsection% , isLinks, 1
 if(DM_Folder==""){
     DM_Folder:= a_workingdir . "\DMFiles"
 }
 ifnotexist % DM_Folder 
 {
     FileCreateDir, %DM_Folder%
+}
+if(DM_isAutoStart==0){
+    FileDelete, C:\Users\%a_username%\Links\DM.lnk
+}else{
+    FileCreateShortcut,%DM_Folder%,C:\Users\%a_username%\Links\DM.lnk
+}
+if(DM_isLinks==0){
+    FileDelete, %A_Startup%\DesktopManager.lnk
+}else{
+    FileCreateShortcut,%a_scriptfullpath%,%A_Startup%\DesktopManager.lnk, %a_scriptdir%
 }
 if( DM_templatesDir ==""){
     DM_templatesDir:="templates"
@@ -143,6 +163,9 @@ IniRead, DM_btnFileTip            , %DM_iniFilename%, %DM_lsection%, btnFileTip 
 ;================================
 ; initial variables start
 ;================================
+
+DM_MinWinW:=520
+DM_MinWinH:=118
 ; 加载文件
 ; 计算 SHFILEINFO 结构需要的缓存大小.
 sfi_size := A_PtrSize + 8 + (A_IsUnicode ? 680 : 340)
@@ -289,9 +312,7 @@ WinGet, ControlListHwnd , ControlListHwnd, ahk_id %hDesktopManager%
 Gui, Add, Picture, x0 y0 W%GuiWidth% H%GuiHeight% hwndhWndPicControl, bg.png
 */
 
-; 显示窗口并返回. 当用户执行预期的动作时
-; 操作系统会通知脚本:
-Gui, DMMain:Show, % "W" . DM_sizeW . "H" . DM_sizeH . "X" . A_ScreenWidth-DM_sizeW . "Y0"
+Gui, DMMain:Show, Hide
 
 ; 鼠标移动
 OnMessage(0x200, "DM_WM_MOUSEMOVE") 
@@ -310,13 +331,27 @@ if DM_id=   ;如果用户设定的是动态桌面
 }
 ControlGet,DM_DesktopID,hwnd,,SysListView321,ahk_id %DM_id%
 DllCall( "SetParent", UInt, hDesktopManager, UInt, DM_DesktopID)
+
+; 显示窗口并返回. 当用户执行预期的动作时
+; 操作系统会通知脚本:
+Gui, DMMain:Show, % "W" . DM_sizeW . "H" . DM_sizeH . "X" . DM_X . "Y" . DM_Y
+
 ; 隐藏顶部按钮
 DM_ToggleButton(DM_btnIsShow)
 ; 圆角
 ; WinSet, Region, 0-0 W%DM_sizeW% H%DM_sizeH% R40-40, ahk_id %hDesktopManager%
 ; gosub LoadFile
 gosub DM_btnHome
+onexit, ExitSub
 return
+
+ExitSub:
+WinGetPos, DM_X, DM_Y, DM_sizeW, DM_sizeH, ahk_id %hDesktopManager%
+IniWrite, %DM_X%, %DM_iniFilename%, %DM_gsection%, WinX
+IniWrite, %DM_Y%, %DM_iniFilename%, %DM_gsection%, WinY
+IniWrite, %DM_sizeW%, %DM_iniFilename%, %DM_gsection%, sizeW 
+IniWrite, %DM_sizeH%, %DM_iniFilename%, %DM_gsection%, sizeH
+ExitApp
 
 DM_AddShortcut:
 ;================================
@@ -337,6 +372,7 @@ ShortcutPaths :=
 ShortcutPaths := Object()
 Shortcutcount:=0
 if(isDMSoft){
+    ; 当前用户的程序文件夹
     Loop, %a_programs%\*.lnk, , 1  ; 递归子文件夹.
     {
         if A_LoopFileName contains Uninstall,Update,卸载,升级,注册,帮助,Help
@@ -348,6 +384,26 @@ if(isDMSoft){
             continue
 
         SplitPath , A_LoopFileFullPath,,,,filename_no_ext
+        ListBoxItems .= filename_no_ext . "|"
+        ShortcutPaths[++Shortcutcount] := A_LoopFileFullPath
+        ; IfExist % OutTarget
+            ; fileappend, "%OutTarget%"`,"%filename_no_ext%"`,"%outicon%"`,"%outiconnum%"`,"%OutArgs%"`n, software.txt
+    }
+    ; 公共的程序文件夹
+    Loop, %a_programscommon%\*.lnk, , 1  ; 递归子文件夹.
+    {
+        if A_LoopFileName contains Uninstall,Update,卸载,升级,注册,帮助,Help
+            continue
+
+        FileGetShortcut, %A_LoopFileFullPath%, OutTarget ;, OutDir, OutArgs, OutDesc, OutIcon, OutIconNum, OutRunState
+        SplitPath , OutTarget, , , ext
+        if (ext != "exe") 
+            continue
+
+        SplitPath , A_LoopFileFullPath,,,,filename_no_ext
+        ;; 公共和用户可能有重复的程序
+        if(InStr(ListBoxItems,filename_no_ext))
+            continue
         ListBoxItems .= filename_no_ext . "|"
         ShortcutPaths[++Shortcutcount] := A_LoopFileFullPath
         ; IfExist % OutTarget
@@ -1035,6 +1091,53 @@ DM_btnIsShow := !DM_btnIsShow
 DM_ToggleButton(DM_btnIsShow)
 DM_btnIsAlwaysShow := DM_btnIsShow
 Return
+
+~LButton::
+coordmode, mouse
+MouseGetPos,DM_X1,DM_Y1, , Control_id ,2
+if(Control_id != "")
+    Return
+; Get the initial window position and size.
+WinGetPos,DM_WinX1,DM_WinY1,DM_WinW,DM_WinH,ahk_id %hDesktopManager%
+; Define the window region the mouse is currently in.
+; The four regions are Up and Left, Up and Right, Down and Left, Down and Right.
+If (DM_X1 < DM_WinX1 + DM_WinW / 2)
+   DM_WinLeft := 1
+Else
+   DM_WinLeft := -1
+If (DM_Y1 < DM_WinY1 + DM_WinH / 2)
+   DM_WinUp := 1
+Else
+   DM_WinUp := -1
+Loop
+{
+    GetKeyState,DM_Button,LButton,P ; Break if button has been released.
+    If DM_Button = U
+    {
+        gosub DM_menuRefresh
+        break
+    }
+    MouseGetPos,DM_X2,DM_Y2 ; Get the current mouse position.
+    ; Get the current window position and size.
+    WinGetPos,DM_WinX1,DM_WinY1,DM_WinW,DM_WinH,ahk_id %hDesktopManager%
+    DM_X2 -= DM_X1 ; Obtain an offset from the initial mouse position.
+    DM_Y2 -= DM_Y1
+    NewWinW:=DM_WinW  -     DM_WinLeft  *DM_X2
+    NewWinH:=DM_WinH  -       DM_WinUp  *DM_Y2
+    ; Then, act according to the defined region.
+    if(NewWinH>DM_MinWinH&&NewWinW>DM_MinWinW) {
+    WinMove,ahk_id %hDesktopManager%,, DM_WinX1 + (DM_WinLeft+1)/2*DM_X2  ; X of resized window
+                            , DM_WinY1 +   (DM_WinUp+1)/2*DM_Y2  ; Y of resized window
+                            , NewWinW  ; W of resized window
+                            , NewWinH  ; H of resized window
+    } else {
+        ; myToolTip("已移动到最小")
+    }
+    DM_X1 := (DM_X2 + DM_X1) ; Reset the initial position for the next iteration.
+    DM_Y1 := (DM_Y2 + DM_Y1)
+}
+Return
+#IfWinActive
 
 ;清除提示
 RemoveToolTip:

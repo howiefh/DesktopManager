@@ -9,7 +9,7 @@
 
 ## 安装
 
-本软件是绿色软件，复制到任何地方都可以运行。下载:<http://pan.baidu.com/s/1kTFlT8z>
+本软件是绿色软件，复制到任何地方都可以运行。下载:<http://pan.baidu.com/s/1dDkWoTj>
 
 ## 配置
 
@@ -28,6 +28,8 @@ compressCmd      = ""D:\Applications\HaoZip\HaoZipC.exe" a -tzip "
 decompressCmd    = ""D:\Applications\HaoZip\HaoZipC.exe" x "
 # 压缩文件后缀
 compExtList       = "zip,7z,rar,gz,tar,bz,bz2,bzip2,deb,001"
+# 支持编辑的文件后缀
+editExtList       = "doc,docx,ppt,pptx,xls,xlsx,txt,md,ahk,c,h,cpp,java,ini,xml,html,css,js"
 # 模板目录
 templatesDir     = "templates"
 # 是否启用鼠标滑过显示按钮的功能，默认启用
@@ -44,4 +46,12 @@ sizeH            =
 fontC            = "ffffff"
 # 快捷方式存放的目录
 shortcutDir      = "shortcut"
+# 程序关闭时的x坐标
+WinX            =
+# 程序关闭时的y坐标
+WinY            =
+# 开机启动 设置为0可取消
+isAutoStart      = 1
+# 将主模式的目录添加到收藏夹 设置为0可取消
+isLinks          = 1
 ```
